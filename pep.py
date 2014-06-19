@@ -428,5 +428,6 @@ print g_profile
 print clc.insert(g_profile)
 clc=client.static_meta.binaries
 binData=binary.Binary(base64.b64encode(fc))
+#inserting into binary collection
 print clc.insert({META.md5:g_profile[PROFILE.STATIC][META.md5],'data':binData})
 
