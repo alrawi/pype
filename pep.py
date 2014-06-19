@@ -1,5 +1,6 @@
 from pep_def import *
 from pymongo import MongoClient
+from bson import binary
 import hashlib
 import pefile
 import peutils
@@ -8,7 +9,7 @@ import json
 import re
 import string
 import datetime
-
+import base64
 
 def is_pe(filename):
     try:
@@ -422,6 +423,10 @@ g_profile[PROFILE.STATIC][META.procDate]=datetime.datetime.utcnow()
 
 #insert into DB
 client=MongoClient('10.2.4.34',27017)
-clc=client.static_meta.binaries
+clc=client.static_meta.meta
 print g_profile
 print clc.insert(g_profile)
+clc=client.static_meta.binaries
+binData=binary.Binary(base64.b64encode(fc))
+print clc.insert({META.md5:g_profile[PROFILE.STATIC][META.md5],'data':binData})
+
