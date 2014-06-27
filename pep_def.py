@@ -10,6 +10,7 @@ class META:
     numberSec='ns'
     md5='m5'
     sha1='s1'
+    ssdeep='ssd'
     importHash='ih'
 
 class PECOFF:

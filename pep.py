@@ -1,6 +1,7 @@
 from pep_def import *
 from pymongo import MongoClient
 from bson import binary
+from timeout import timeout
 import hashlib
 import pefile
 import peutils
@@ -9,12 +10,15 @@ import json
 import re
 import string
 import datetime
+import time
 import base64
+import zlib
+import logging as lg
+import ssdeep
 
-def is_pe(filename):
+def is_pe(fc):
     try:
-        pe = pefile.PE(filename)
-        return True
+        return pefile.PE(data=fc, fast_load=False)
     except:
         return False
 
@@ -27,6 +31,7 @@ def processMeta(pe,fc, profile):
     profile[PROFILE.STATIC][META.importHash]=pe.get_imphash()
     profile[PROFILE.STATIC][META.md5]=hashlib.md5(fc).hexdigest()
     profile[PROFILE.STATIC][META.sha1]=hashlib.sha1(fc).hexdigest()
+    profile[PROFILE.STATIC][META.ssdeep]=ssdeep.hash(fc)
     return profile
 
 def processPEHeader(pe, profile):
@@ -51,7 +56,7 @@ def processPEHeader(pe, profile):
                 profile[PROFILE.STATIC][PECOFF.subsystem] = pe.OPTIONAL_HEADER.Subsystem
                 profile[PROFILE.STATIC][PECOFF.imageSize] = pe.OPTIONAL_HEADER.SizeOfImage
     except:
-        print sys.exc_info()
+        lg.warning(sys.exc_info())
 
     return profile
 
@@ -228,7 +233,7 @@ def processImports(pe, profile):
 
         profile[PROFILE.STATIC][PECOFF.imports]=impList
     except:
-        print sys.exc_info()
+        lg.warning(sys.exc_info())
     return profile
 
 def processExports(pe, profile):
@@ -238,7 +243,7 @@ def processExports(pe, profile):
             expList.append(exp.name)
         profile[PROFILE.STATIC][PECOFF.exports]=expList
     except:
-        print sys.exc_info()
+        lg.warning(sys.exc_info())
     return profile
 
 def processSummaryInfo(pe,profile):
@@ -247,15 +252,17 @@ def processSummaryInfo(pe,profile):
         for e in pe.FileInfo[0].StringTable[0].entries.items():
             profile[PROFILE.STATIC][PECOFF.versionInfo][e[0]]=e[1]
     except:
-        print sys.exc_info()
+        lg.warning(sys.exc_info())
     return profile
 
 def processPEiD(pe, profile):
     signatures = peutils.SignatureDatabase(fn_userdb)
     profile[PROFILE.STATIC][PECOFF.peid]=[]
-    for entry in signatures.match_all(pe,ep_only = True):
-        profile[PROFILE.STATIC][PECOFF.peid].append(entry[0])
-
+    try:
+        for entry in signatures.match_all(pe,ep_only = True):
+            profile[PROFILE.STATIC][PECOFF.peid].append(entry[0])
+    except:
+        lg.info("no packer info found")
     return profile
 
 def processAntiVM(sfile, profile):
@@ -402,32 +409,41 @@ def processFileUrl(fc, profile):
     profile[PROFILE.STATIC][PECOFF.strings]=arrayFileNames
     return profile
 
-fn_userdb='userdb.txt'
-fc=open(sys.argv[1],'rb').read()
-pe = pefile.PE(data=fc, fast_load=False)
-g_profile={
-    PROFILE.STATIC:{}
-}
-g_profile=processMeta(pe, fc, g_profile)
-g_profile=processPEHeader(pe,g_profile)
-g_profile=processDirectories(pe,g_profile)
-g_profile=processSections(pe,g_profile)
-g_profile=processImports(pe,g_profile)
-g_profile=processExports(pe,g_profile)
-g_profile=processSummaryInfo(pe,g_profile)
-g_profile=processPEiD(pe,g_profile)
-g_profile=processAntiVM(fc, g_profile)
-g_profile=processFileUrl(fc, g_profile)
-g_profile[PROFILE.STATIC][META.fileName]=sys.argv[1]
-g_profile[PROFILE.STATIC][META.procDate]=datetime.datetime.utcnow()
+fn_userdb='dbs/userdb.txt'
+@timeout(300)
+def processFile(fc,fn):
+    st=time.time()
+    lg.info("Meta data extraction starting for file %s"%(fn))
+    pe=is_pe(fc)
+    if not pe:
+        lg.info("File not PE skipping")
+        return False
 
-#insert into DB
-client=MongoClient('10.2.4.34',27017)
-clc=client.static_meta.meta
-print g_profile
-print clc.insert(g_profile)
-clc=client.static_meta.binaries
-binData=binary.Binary(base64.b64encode(fc))
-#inserting into binary collection
-print clc.insert({META.md5:g_profile[PROFILE.STATIC][META.md5],'data':binData})
+    g_profile={
+        PROFILE.STATIC:{}
+    }
+    g_profile=processMeta(pe, fc, g_profile)
+    g_profile=processPEHeader(pe,g_profile)
+    g_profile=processDirectories(pe,g_profile)
+    g_profile=processSections(pe,g_profile)
+    g_profile=processImports(pe,g_profile)
+    g_profile=processExports(pe,g_profile)
+    g_profile=processSummaryInfo(pe,g_profile)
+    g_profile=processPEiD(pe,g_profile)
+    g_profile=processAntiVM(fc, g_profile)
+    g_profile=processFileUrl(fc, g_profile)
+    g_profile[PROFILE.STATIC][META.fileName]=fn
+    g_profile[PROFILE.STATIC][META.procDate]=datetime.datetime.utcnow()
+    lg.info("Metadata extractoin complete in %f sec"%(time.time()-st))
 
+    #insert into DB
+    st=time.time()
+    client=MongoClient('10.2.4.34',27017)
+    clc=client.malware.meta
+    lg.info("inserting meta data ObjectId is %s"%(str(clc.insert(g_profile))))
+    clc=client.malware.bins
+    binData=binary.Binary(base64.b64encode(zlib.compress(fc)))
+    #inserting into binary collection
+    lg.info("inserting binary ObjectId is %s"%(str(clc.insert({META.md5:g_profile[PROFILE.STATIC][META.md5],'d':binData}))))
+    lg.info("Presisted binary and metadata in %f sec"%(time.time()-st))
+    return True
