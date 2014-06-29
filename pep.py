@@ -1,7 +1,6 @@
 from pep_def import *
 from pymongo import MongoClient
-from bson import binary
-from timeout import timeout
+from bson import binary, BSON
 import hashlib
 import pefile
 import peutils
@@ -238,6 +237,7 @@ def processImports(pe, profile):
 
 def processExports(pe, profile):
     expList=[]
+    profile[PROFILE.STATIC][PECOFF.exports]=expList
     try:
         for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
             expList.append(exp.name)
@@ -410,7 +410,6 @@ def processFileUrl(fc, profile):
     return profile
 
 fn_userdb='dbs/userdb.txt'
-@timeout(300)
 def processFile(fc,fn):
     st=time.time()
     lg.info("Meta data extraction starting for file %s"%(fn))
@@ -440,6 +439,7 @@ def processFile(fc,fn):
     st=time.time()
     client=MongoClient('10.2.4.34',27017)
     clc=client.malware.meta
+    BSON.encode(g_profile)
     lg.info("inserting meta data ObjectId is %s"%(str(clc.insert(g_profile))))
     clc=client.malware.bins
     binData=binary.Binary(base64.b64encode(zlib.compress(fc)))
