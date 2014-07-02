@@ -414,7 +414,7 @@ def processFileUrl(fc, profile):
 fn_userdb='dbs/userdb.txt'
 def processFile(fc,fn):
     charfmt=chardet.detect(fc)
-    fc_a=fc.decode(charfmt['encoding']).encode('utf8')
+    fc=fc.decode(charfmt['encoding']).encode('utf8')
     st=time.time()
     lg.info("Meta data extraction starting for file %s"%(fn))
     pe=is_pe(fc)
