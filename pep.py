@@ -14,6 +14,8 @@ import base64
 import zlib
 import logging as lg
 import ssdeep
+import ConfigParser
+import chardet
 
 def is_pe(fc):
     try:
@@ -411,6 +413,8 @@ def processFileUrl(fc, profile):
 
 fn_userdb='dbs/userdb.txt'
 def processFile(fc,fn):
+    charfmt=chardet.detect(fc)
+    fc=fc.decode(charfmt['encoding']).encode('utf8')
     st=time.time()
     lg.info("Meta data extraction starting for file %s"%(fn))
     pe=is_pe(fc)
@@ -439,7 +443,6 @@ def processFile(fc,fn):
     st=time.time()
     client=MongoClient('10.2.4.34',27017)
     clc=client.malware.meta
-    BSON.encode(g_profile)
     lg.info("inserting meta data ObjectId is %s"%(str(clc.insert(g_profile))))
     clc=client.malware.bins
     binData=binary.Binary(base64.b64encode(zlib.compress(fc)))
