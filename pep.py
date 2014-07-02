@@ -416,7 +416,7 @@ def processFile(fc,fn):
 
     #fix encoding
     charfmt=chardet.detect(fc)
-    if charfmt['encoding'] not is None:
+    if charfmt['encoding'] is not None:
         fc=fc.decode(charfmt['encoding']).encode('utf8')
 
     st=time.time()
