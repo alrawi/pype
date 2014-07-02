@@ -204,15 +204,12 @@ def processSections(pe, profile):
     for sec in pe.sections:
         tmp={}
         tmp[PESEC.entropy]=sec.get_entropy()
-        try:# try to use 7bit ascii first
-            tmp[PESEC.name]=sec.Name
-        except: # but if that fails, switch to 8bit ascii
-            tmp[PESEC.name]=sec.Name.encode('utf-8')
+        tmp[PESEC.name]=decode_str(sec.Name)
         tmp[PESEC.md5]=sec.get_hash_md5()
         tmp[PESEC.sha1]=sec.get_hash_sha1()
-        tmp[PESEC.virtualAddress]=hex(sec.VirtualAddress)
-        tmp[PESEC.virtualSize]=hex(sec.Misc_VirtualSize)
-        tmp[PESEC.sizeOfRawData]=hex(sec.SizeOfRawData)
+        tmp[PESEC.virtualAddress]=sec.VirtualAddress
+        tmp[PESEC.virtualSize]=sec.Misc_VirtualSize
+        tmp[PESEC.sizeOfRawData]=sec.SizeOfRawData
         if tmp[PESEC.sizeOfRawData]==0 or (tmp[PESEC.entropy]>0 and tmp[PESEC.entropy]<1) or tmp[PESEC.entropy]>7:
             tmp[PESEC.suspicious]=True
         else:
@@ -225,11 +222,12 @@ def processImports(pe, profile):
     impList={}
     try:
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
-            dll = entry.dll[:-4]
+            dll = decode_str(entry.dll)
+            dll=dll[:dll.index('.')]
             if dll not in impList.keys():
                 impList[dll]=[]
             for imp in entry.imports:
-                function = imp.name
+                function = decode_str(imp.name)
                 impList[dll].append(function)
 
         profile[PROFILE.STATIC][PECOFF.imports]=impList
@@ -242,7 +240,7 @@ def processExports(pe, profile):
     profile[PROFILE.STATIC][PECOFF.exports]=expList
     try:
         for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-            expList.append(exp.name)
+            expList.append(decode_str(exp.name))
         profile[PROFILE.STATIC][PECOFF.exports]=expList
     except:
         lg.warning(sys.exc_info())
@@ -252,7 +250,7 @@ def processSummaryInfo(pe,profile):
     profile[PROFILE.STATIC][PECOFF.versionInfo]={}
     try:
         for e in pe.FileInfo[0].StringTable[0].entries.items():
-            profile[PROFILE.STATIC][PECOFF.versionInfo][e[0]]=e[1]
+            profile[PROFILE.STATIC][PECOFF.versionInfo][e[0].replace('.','_')]=e[1]
     except:
         lg.warning(sys.exc_info())
     return profile
@@ -296,6 +294,24 @@ def processAntiVM(sfile, profile):
     
     profile[PROFILE.STATIC][PECOFF.vm]=trk
     return profile
+#helper function to decode correct codec
+def decode_str(data):
+    dstr=''
+    try:
+        dstr=data.encode(chardet.detect(data)['encoding'])
+    except:
+        dstr=clean_str(data)
+
+    return dstr
+
+#helper function to clean strings
+def clean_str(data):
+    printable=set(string.printable)
+    fstr=''
+    for char in data:
+        if char in printable:
+            fstr+=char
+    return fstr
 
 #helper function to extract strings
 def get_string(data):
@@ -413,11 +429,6 @@ def processFileUrl(fc, profile):
 
 fn_userdb='dbs/userdb.txt'
 def processFile(fc,fn):
-
-    #fix encoding
-    charfmt=chardet.detect(fc)
-    if charfmt['encoding'] is not None:
-        fc=fc.decode(charfmt['encoding'], 'ignore').encode('utf8','ignore')
 
     st=time.time()
     lg.info("Meta data extraction starting for file %s"%(fn))
