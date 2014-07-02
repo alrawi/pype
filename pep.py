@@ -417,7 +417,7 @@ def processFile(fc,fn):
     #fix encoding
     charfmt=chardet.detect(fc)
     if charfmt['encoding'] is not None:
-        fc=fc.decode(charfmt['encoding']).encode('utf8')
+        fc=fc.decode(charfmt['encoding'], errors='ignore').encode('utf8','ignore')
 
     st=time.time()
     lg.info("Meta data extraction starting for file %s"%(fn))
