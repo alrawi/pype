@@ -220,6 +220,7 @@ def processSections(pe, profile):
 
 def processImports(pe, profile):
     impList={}
+    profile[PROFILE.STATIC][PECOFF.imports]=impList
     try:
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
             dll = decode_str(entry.dll)
